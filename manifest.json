@@ -1,0 +1,23 @@
+{
+  "name": "Austin's Sports",
+  "short_name": "Austin's",
+  "description": "Live scores: tennis, WNBA, NFL, NBA, NHL, CFB, CBB",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#5fb2ec",
+  "theme_color": "#5fb2ec",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
