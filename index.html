@@ -427,6 +427,29 @@ const headshotUrl = (key, athleteId) =>
 
 const mapSofaState = t => t === "inprogress" ? "in" : (t === "finished" ? "post" : "pre");
 
+// SofaScore's API blocks cross-origin browser requests, so we try direct first
+// (in case that ever changes), then public CORS relays. Remembers what worked.
+let sofaVia = 0;
+const SOFA_ROUTES = [
+  u => u,
+  u => "https://corsproxy.io/?url=" + encodeURIComponent(u),
+  u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
+];
+async function sofaFetch(url){
+  let lastErr;
+  for (let i = 0; i < SOFA_ROUTES.length; i++) {
+    const idx = (sofaVia + i) % SOFA_ROUTES.length;
+    try {
+      const r = await fetch(SOFA_ROUTES[idx](url), {cache: "no-store"});
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const j = await r.json();
+      sofaVia = idx;
+      return j;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("SofaScore unreachable");
+}
+
 function parseSofaEvents(events){
   const out = [];
   for (const e of (events || [])) {
@@ -479,10 +502,10 @@ async function fetchTennis(force){
     const dash = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
     const urls = [`${SOFA}/sport/tennis/scheduled-events/${dash}`];
     if (isToday()) urls.push(`${SOFA}/sport/tennis/events/live`);
-    const jsons = await Promise.all(urls.map(u => fetch(u, {cache: "no-store"}).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })));
+    const jsons = await Promise.all(urls.map(u => sofaFetch(u)));
     const byId = new Map();
     for (const j of jsons) for (const m of parseSofaEvents(j.events)) byId.set(m.id, m);
-    entry = {t: Date.now(), data: [...byId.values()], err: null, source: "SofaScore"};
+    entry = {t: Date.now(), data: [...byId.values()], err: null, source: "SofaScore" + (sofaVia ? " via relay" : "")};
   } catch (e) {
     // fall back to ESPN
     try {
@@ -1070,7 +1093,7 @@ async function fetchTennisDetail(eid, force){
   const ck = `d|tennis|${eid}`;
   const hit = detailCache.get(ck);
   if (!force && hit && Date.now() - hit.t < CACHE_MS) return hit;
-  const get = u => fetch(u, {cache: "no-store"}).then(r => r.ok ? r.json() : null).catch(() => null);
+  const get = u => sofaFetch(u).catch(() => null);
   const [ev, st, pbp] = await Promise.all([
     get(`${SOFA}/event/${eid}`),
     get(`${SOFA}/event/${eid}/statistics`),
